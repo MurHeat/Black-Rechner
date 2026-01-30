@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>MurHeat BLACK – Heizflächen‑Rechner</title>
+  <meta name="theme-color" content="#111318">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <style>
+    :root{
+      --bg:#0f1116;         /* dunkler als Carbon */
+      --panel:#151922;      /* Paneel */
+      --border:#1d2430;     /* Rahmen */
+      --fg:#eaf3ff;         /* Text */
+      --muted:#a1adbd;      /* Sekundärtext */
+      --accent:#23d3ff;     /* Cyan */
+      --accent-2:#69e6ff;   /* helleres Cyan */
+      --danger:#ffb26b;     /* Warnfarbe */
+      --ok:#62e0a6;         /* OK */
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius: 14px;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family: Inter, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
+
+    /* Splash */
+    #splash{position:fixed;inset:0;background:radial-gradient(1200px 600px at 50% -200px, rgba(35,211,255,.15), transparent 60%), var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999}
+    #splash .logo{width:min(34vh,34vw);aspect-ratio:1/1;display:block;filter:drop-shadow(0 0 18px rgba(35,211,255,.35));animation:logoPulse 2.6s ease-in-out infinite}
+    #splash .brand{margin-top:24px;text-align:center}
+    #splash .brand h1{margin:0;font-size:clamp(24px,5.6vw,40px);letter-spacing:1px;font-weight:800;text-transform:uppercase}
+    #splash .brand .black{color:#fff;display:inline-block;margin-top:6px;font-weight:900;letter-spacing:3px;text-shadow:0 0 20px rgba(35,211,255,.35)}
+    #splash .brand .sub{margin-top:6px;color:var(--accent);font-size:clamp(16px,4.6vw,26px);font-weight:800;letter-spacing:2px;text-transform:uppercase}
+    .enter{animation:fadeOut 900ms 1400ms ease forwards}
+    @keyframes logoPulse{0%{transform:scale(1);filter:drop-shadow(0 0 10px rgba(35,211,255,.25));}50%{transform:scale(1.03);filter:drop-shadow(0 0 26px rgba(35,211,255,.55));}100%{transform:scale(1);filter:drop-shadow(0 0 10px rgba(35,211,255,.25));}}
+    @keyframes fadeOut{to{opacity:0;visibility:hidden}}
+
+    /* Header */
+    header{position:sticky;top:0;background:linear-gradient(180deg, rgba(17,20,27,0.96) 0%, rgba(17,20,27,0.75) 100%);backdrop-filter:saturate(1.2) blur(6px);padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;z-index:2}
+    header img{width:28px;height:28px;filter:drop-shadow(0 0 8px rgba(35,211,255,.35));animation:logoPulse 3s ease-in-out infinite}
+    header h1{font-size:16px;margin:0;font-weight:900;letter-spacing:.5px}
+    header .spacer{flex:1}
+    header select{background:#0e1218;color:#e7f0ff;border:1px solid #273042;border-radius:10px;padding:6px 10px;font-weight:700}
+
+    .band{height:3px;background:linear-gradient(90deg, #0fbfe5, #23d3ff, #8be9ff);background-size:200% 100%;animation:flow 6s linear infinite}
+    @keyframes flow{0%{background-position:0% 50%}100%{background-position:200% 50%}}
+
+    main{max-width:980px;margin:18px auto;padding:0 16px 70px}
+    .row{display:grid;grid-template-columns: 1fr; gap:16px}
+    @media (min-width: 920px){ .row{ grid-template-columns: 1.1fr .9fr; } }
+    .card{background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow);border-radius:var(--radius);padding:16px}
+
+    h2{margin:0 0 12px;font-size:16px;letter-spacing:.2px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+    label{font-size:13px;color:var(--muted);display:block;margin:0 0 6px}
+
+    .control{display:flex;gap:8px}
+    input{flex:1;min-width:0;padding:10px 12px;border:1px solid #2a3344;border-radius:10px;background:#0e1218;color:#e7f0ff;font-size:15px}
+    input:focus{outline:2px solid rgba(35,211,255,.35);border-color:#3aa6ff}
+    .units{color:var(--muted);font-size:12px;margin-left:6px}
+
+    .btn{appearance:none;border:0;background:#132033;color:#e7f0ff;border-radius:10px;padding:10px 12px;font-weight:800;cursor:pointer}
+    .btn.secondary{background:#0e1218;border:1px solid #2a3344}
+
+    .kv{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px dashed #273042}
+    .kv:last-child{border-bottom:none}
+    .kv .k{color:var(--muted)}
+    .kv .v{font-weight:800}
+
+    .hint{font-size:12px;color:var(--muted)}
+    .ok{color:var(--ok)}
+    .warn{color:var(--danger)}
+
+    .footer{opacity:.7;text-align:center;font-size:12px;margin-top:20px}
+  </style>
+  <script>
+    const RHO = 0.00049125; // Ω·m (aus Messung)
+
+    // i18n: deutsch, englisch, italienisch
+    const I18N = {
+      de:{
+        title:'MurHeat BLACK – Heizflächen‑Rechner',
+        splashSub:'Heizflächen‑Rechner',
+        inputs:'Einstellungen',
+        length:'Kupfer‑Länge', width:'Streifen‑Breite', maxwidth:'Max. Flächenbreite', thickness:'Schichtdicke', voltage:'Spannung',
+        results:'Ergebnisse',
+        innergap:'Innenabstand', area:'Fläche', section:'Querschnitt', resistance:'Widerstand', current:'Strom', power:'Leistung', power_m2:'Watt pro m²',
+        hint_ok:'✓ Werte plausibel. App kann zum Home‑Bildschirm hinzugefügt werden.',
+        hint_gap:'⚠️ Innenabstand ≤ 0: Max. Flächenbreite > 2× Streifen‑Breite wählen.',
+        hint_sec:'⚠️ Querschnitt = 0: Schichtdicke und Länge müssen > 0 sein.',
+        actions:'Aktionen', recalc:'Neu berechnen', reset:'Zurücksetzen',
+        about:'ρ ist aus deiner Messung abgeleitet. Eingaben werden lokal gespeichert.'
+      },
+      en:{
+        title:'MurHeat BLACK – Heating‑Surface Calculator',
+        splashSub:'Heating‑Surface Calculator',
+        inputs:'Settings',
+        length:'Copper length', width:'Strip width', maxwidth:'Max. surface width', thickness:'Coating thickness', voltage:'Voltage',
+        results:'Results',
+        innergap:'Inner gap', area:'Area', section:'Cross‑section', resistance:'Resistance', current:'Current', power:'Power', power_m2:'Watt per m²',
+        hint_ok:'✓ Values look plausible. You can add the app to the Home Screen.',
+        hint_gap:'⚠️ Inner gap ≤ 0: choose max width > 2× strip width.',
+        hint_sec:'⚠️ Cross‑section = 0: thickness and length must be > 0.',
+        actions:'Actions', recalc:'Recalculate', reset:'Reset',
+        about:'ρ is derived from your measurement. Inputs are stored locally.'
+      },
+      it:{
+        title:'MurHeat BLACK – Calcolatore superficie di riscaldamento',
+        splashSub:'Calcolatore superficie di riscaldamento',
+        inputs:'Impostazioni',
+        length:'Lunghezza rame', width:'Larghezza striscia', maxwidth:'Larghezza massima', thickness:'Spessore rivestimento', voltage:'Tensione',
+        results:'Risultati',
+        innergap:'Distanza interna', area:'Superficie', section:'Sezione', resistance:'Resistenza', current:'Corrente', power:'Potenza', power_m2:'Watt per m²',
+        hint_ok:'✓ Valori plausibili. Puoi aggiungere l’app alla schermata Home.',
+        hint_gap:'⚠️ Distanza interna ≤ 0: scegliere larghezza max > 2× larghezza striscia.',
+        hint_sec:'⚠️ Sezione = 0: spessore e lunghezza devono essere > 0.',
+        actions:'Azioni', recalc:'Ricalcola', reset:'Reimposta',
+        about:'ρ è derivata dalla tua misurazione. Gli input sono salvati in locale.'
+      }
+    };
+
+    function $(id){return document.getElementById(id)}
+    function num(el){const v=parseFloat((el.value||'').toString().replace(',','.'));return isFinite(v)?v:0}
+    function fmt(v,d=4){if(!isFinite(v))return '—';const lang=localStorage.getItem('lang')||'de';const loc=lang==='de'?'de-DE':lang==='it'?'it-IT':'en-GB';return (Math.round(v*10**d)/10**d).toLocaleString(loc)}
+
+    function load(){
+      const s=JSON.parse(localStorage.getItem('state')||'{}');
+      ['laenge_m','breite_cm','maxbreite_m','dicke_mm','spannung_v'].forEach(k=>{ if(s[k]!=null){ $(k).value = s[k]; } });
+    }
+    function save(){
+      const s={ laenge_m:$('#laenge_m').value, breite_cm:$('#breite_cm').value, maxbreite_m:$('#maxbreite_m').value, dicke_mm:$('#dicke_mm').value, spannung_v:$('#spannung_v').value };
+      localStorage.setItem('state', JSON.stringify(s));
+    }
+
+    function compute(){
+      const laenge_m=num($('#laenge_m')); const breite_cm=num($('#breite_cm')); const maxbreite_m=num($('#maxbreite_m')); const dicke_mm=num($('#dicke_mm')); const U=num($('#spannung_v'));
+      const breite_m=breite_cm/100.0; const dicke_m=dicke_mm/1000.0;
+      const innenabstand=maxbreite_m - 2*breite_m; const flaeche=innenabstand*laenge_m; const querschnitt=dicke_m*laenge_m;
+      const R=(querschnitt>0)?(RHO*innenabstand/querschnitt):NaN; const I=(R>0)?(U/R):NaN; const P=(R>0)?((U*U)/R):NaN; const Pm2=(flaeche>0)?(P/flaeche):NaN;
+      set('innenabstand_v',innenabstand,4); set('flaeche_v',flaeche,4); set('querschnitt_v',querschnitt,6); set('widerstand_v',R,4); set('strom_v',I,4); set('leistung_v',P,2); set('wattpm2_v',Pm2,2);
+      const lang = localStorage.getItem('lang')||'de'; const dict=I18N[lang];
+      const hint=$('#hint'); if(innenabstand<=0){hint.textContent=dict.hint_gap; hint.className='hint warn'} else if(querschnitt<=0){hint.textContent=dict.hint_sec; hint.className='hint warn'} else {hint.textContent=dict.hint_ok; hint.className='hint ok'}
+      save();
+    }
+    function set(id,val,d){ $(id).textContent = fmt(val,d); }
+
+    function setLang(lang){ if(!I18N[lang]) lang='de'; localStorage.setItem('lang',lang); document.documentElement.lang=lang; const t=I18N[lang]; document.title=t.title; $('#title').textContent=t.title; $('#inputs_h').textContent=t.inputs; $('#lab_len').innerHTML=t.length+" <span class='units'>(m)</span>"; $('#lab_w').innerHTML=t.width+" <span class='units'>(cm)</span>"; $('#lab_max').innerHTML=t.maxwidth+" <span class='units'>(m)</span>"; $('#lab_th').innerHTML=t.thickness+" <span class='units'>(mm)</span>"; $('#lab_u').innerHTML=t.voltage+" <span class='units'>(V)</span>"; $('#results_h').textContent=t.results; $('#k_gap').textContent=t.innergap; $('#k_area').textContent=t.area; $('#k_sec').textContent=t.section; $('#k_r').textContent=t.resistance; $('#k_i').textContent=t.current; $('#k_p').textContent=t.power; $('#k_pm2').textContent=t.power_m2; $('#btn_recalc').textContent=t.recalc; $('#btn_reset').textContent=t.reset; $('#about').textContent=t.about; $('#splashSub').textContent=t.splashSub; $('#lang').value=lang; }
+
+    function resetAll(){ ['laenge_m','breite_cm','maxbreite_m','dicke_mm','spannung_v'].forEach(id=>$('#'+id).value=''); compute(); }
+
+    window.addEventListener('load',()=>{
+      const initial = (navigator.language||'de').slice(0,2); setLang(['de','en','it'].includes(initial)?initial:'de'); load(); compute();
+      const s=$('#splash'); setTimeout(()=>{s.classList.add('enter'); setTimeout(()=> s.remove(), 1200)}, 1200);
+      if('serviceWorker' in navigator){ navigator.serviceWorker.register('./service-worker.js').catch(()=>{}); }
+    })
+  </script>
+</head>
+<body>
+  <!-- Splash -->
+  <div id="splash">
+    <img class="logo" src="./assets/murheat-logo.png" alt="MurHeat BLACK Logo">
+    <div class="brand">
+      <h1>MurHeat <span class="black">BLACK</span></h1>
+      <div id="splashSub" class="sub">Heizflächen‑Rechner</div>
+    </div>
+  </div>
+
+  <header>
+    <img src="./assets/murheat-logo.png" alt="Logo">
+    <h1 id="title">MurHeat BLACK – Heizflächen‑Rechner</h1>
+    <div class="spacer"></div>
+    <select id="lang" aria-label="Language" onchange="setLang(this.value)">
+      <option value="de">DE</option>
+      <option value="en">EN</option>
+      <option value="it">IT</option>
+    </select>
+  </header>
+  <div class="band"></div>
+
+  <main>
+    <div class="row">
+      <div class="card">
+        <h2 id="inputs_h">Einstellungen</h2>
+        <div class="grid">
+          <div>
+            <label id="lab_len" for="laenge_m">Kupfer‑Länge <span class="units">(m)</span></label>
+            <div class="control"><input id="laenge_m" type="text" inputmode="decimal" value="0,30" oninput="compute()"></div>
+          </div>
+          <div>
+            <label id="lab_w" for="breite_cm">Streifen‑Breite <span class="units">(cm)</span></label>
+            <div class="control"><input id="breite_cm" type="text" inputmode="decimal" value="3" oninput="compute()"></div>
+          </div>
+          <div>
+            <label id="lab_max" for="maxbreite_m">Max. Flächenbreite <span class="units">(m)</span></label>
+            <div class="control"><input id="maxbreite_m" type="text" inputmode="decimal" value="0,30" oninput="compute()"></div>
+          </div>
+          <div>
+            <label id="lab_th" for="dicke_mm">Schichtdicke <span class="units">(mm)</span></label>
+            <div class="control"><input id="dicke_mm" type="text" inputmode="decimal" value="0,1" oninput="compute()"></div>
+          </div>
+          <div>
+            <label id="lab_u" for="spannung_v">Spannung <span class="units">(V)</span></label>
+            <div class="control"><input id="spannung_v" type="text" inputmode="decimal" value="10" oninput="compute()"></div>
+          </div>
+        </div>
+        <p id="hint" class="hint" style="margin-top:10px"></p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px">
+          <button id="btn_recalc" class="btn" onclick="compute()">Neu berechnen</button>
+          <button id="btn_reset" class="btn secondary" onclick="resetAll()">Zurücksetzen</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 id="results_h">Ergebnisse</h2>
+        <div class="kv"><span id="k_gap" class="k">Innenabstand</span><span class="v"><span id="innenabstand_v">—</span> <span class="units">m</span></span></div>
+        <div class="kv"><span id="k_area" class="k">Fläche</span><span class="v"><span id="flaeche_v">—</span> <span class="units">m²</span></span></div>
+        <div class="kv"><span id="k_sec" class="k">Querschnitt</span><span class="v"><span id="querschnitt_v">—</span> <span class="units">m²</span></span></div>
+        <div class="kv"><span id="k_r" class="k">Widerstand</span><span class="v"><span id="widerstand_v">—</span> <span class="units">Ω</span></span></div>
+        <div class="kv"><span id="k_i" class="k">Strom</span><span class="v"><span id="strom_v">—</span> <span class="units">A</span></span></div>
+        <div class="kv"><span id="k_p" class="k">Leistung</span><span class="v"><span id="leistung_v">—</span> <span class="units">W</span></span></div>
+        <div class="kv"><span id="k_pm2" class="k">Watt pro m²</span><span class="v"><span id="wattpm2_v">—</span> <span class="units">W/m²</span></span></div>
+        <p id="about" class="footer">ρ ist aus deiner Messung abgeleitet. Eingaben werden lokal gespeichert.</p>
+      </div>
+    </div>
+  </main>
+</body>
+</html>
